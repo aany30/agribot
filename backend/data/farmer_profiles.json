@@ -1,0 +1,12 @@
+{
+    "default_farmer": {
+        "farmer_id": "default_farmer",
+        "name": "Ramesh Kumar",
+        "location": "Indore",
+        "state": "MP",
+        "crop": "Wheat",
+        "land_acres": 4.5,
+        "language": "hi",
+        "category": "general"
+    }
+}

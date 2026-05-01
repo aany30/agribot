@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+langgraph
+langchain
+langchain-anthropic
+anthropic
+openai
+gTTS
+deep-translator
+python-multipart
+python-dotenv
+requests
+websockets
+pydantic
