@@ -1,6 +1,8 @@
 import os
 import json
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()  # CRITICAL: loads OPENAI_API_KEY from .env file
 from fastapi import FastAPI, WebSocket, UploadFile, File, Form, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -90,6 +92,8 @@ async def chat_endpoint(req: ChatRequest):
             await broadcast_status(agent, status, conf)
             
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
         
     overall_conf = calculate_overall_confidence(final_state.get("agent_confidence", {}))

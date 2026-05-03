@@ -3,7 +3,7 @@ from langgraph.types import Send
 from backend.models.state import AgriState
 import os
 import re
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from backend.utils.conflict_resolver import check_for_conflicts
 from backend.utils.translator import translate_en_to_hi
@@ -17,14 +17,14 @@ from backend.agents.storage_agent import process_storage
 from backend.agents.yield_agent import process_yield
 
 def intent_classifier(state: AgriState):
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     query = state.get("english_query", "")
     
     if not api_key:
         state["intent"] = "general"
     else:
         try:
-            llm = ChatAnthropic(model="claude-3-5-sonnet-20240620", api_key=api_key)
+            llm = ChatOpenAI(model="gpt-4o", api_key=api_key)
             prompt = PromptTemplate.from_template(
                 "Classify the following query into exactly one of these intents: crop_selection, pest_disease, weather_irrigation, mandi_price, soil_health, finance_scheme, post_harvest, yield_prediction, general. "
                 "Return ONLY the intent string. Query: {query}"
@@ -72,14 +72,26 @@ def conflict_resolver(state: AgriState):
     }
 
 def response_synthesizer(state: AgriState):
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return {
             "final_recommendation": f"Mock final recommendation based on agents: {state.get('agent_outputs')}\nConfidence: High\nData Sources: Mock\nFollow-up: Is there anything else I can help with?"
         }
     
+    # Filter agent outputs based on confidence
+    agent_outputs = state.get("agent_outputs", {})
+    agent_confidence = state.get("agent_confidence", {})
+    
+    high_confidence_outputs = {}
+    for agent, output in agent_outputs.items():
+        if agent_confidence.get(agent, 0) > 0.8:
+            high_confidence_outputs[agent] = output
+            
+    if not high_confidence_outputs:
+        high_confidence_outputs = {"System": "I couldn't find a high confidence answer for that query. Based on the context, here is the closest advice: " + str(agent_outputs)}
+
     try:
-        llm = ChatAnthropic(model="claude-3-5-sonnet-20240620", api_key=api_key)
+        llm = ChatOpenAI(model="gpt-4o", api_key=api_key)
         prompt = PromptTemplate.from_template(
             "You are an AgriAdvisor synthesizing specialist outputs.\n"
             "Query: {query}\n"
@@ -95,7 +107,7 @@ def response_synthesizer(state: AgriState):
         )
         res = (prompt | llm).invoke({
             "query": state.get("english_query", ""),
-            "outputs": str(state.get("agent_outputs", {})),
+            "outputs": str(high_confidence_outputs),
             "conflicts": state.get("conflict_explanation", "") if state.get("conflicts_detected") else "None"
         })
         return {"final_recommendation": res.content}

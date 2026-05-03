@@ -1,5 +1,5 @@
 import os
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from backend.models.state import AgriState
 
@@ -16,7 +16,7 @@ def process_crop(state: AgriState) -> AgriState:
         return state
 
     try:
-        llm = ChatAnthropic(model="claude-3-5-sonnet-20240620", api_key=api_key)
+        llm = ChatOpenAI(model="gpt-4o", api_key=api_key)
         prompt = PromptTemplate.from_template(
             "You are an expert Indian agricultural advisor. "
             "Farmer profile: {profile}. Query: {query}. "

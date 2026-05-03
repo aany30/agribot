@@ -1,19 +1,42 @@
 import React, { useContext } from 'react';
 import { AgriProvider, AgriContext } from './context/AgriContext';
+import Onboarding from './components/Onboarding';
 import FarmerProfile from './components/FarmerProfile';
 import AgentGraph from './components/AgentGraph';
 import ChatPanel from './components/ChatPanel';
 import MandiChart from './components/MandiChart';
 import WeatherWidget from './components/WeatherWidget';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect } from 'react';
 
 function AppContent() {
-  const { rightPanelOpen, mandiData, weatherData } = useContext(AgriContext);
+  const { onboardingDone, completeOnboarding, rightPanelOpen, mandiData, weatherData, farmerProfile, setMandiData, setWeatherData } = useContext(AgriContext);
+
+  useEffect(() => {
+    if (onboardingDone && farmerProfile) {
+      if (!weatherData) {
+        fetch(`http://localhost:8000/api/weather?city=${farmerProfile.location}`)
+          .then(r => r.json())
+          .then(setWeatherData)
+          .catch(console.error);
+      }
+      if (!mandiData) {
+        fetch(`http://localhost:8000/api/mandi/prices?crop=${farmerProfile.crop}&state=${farmerProfile.state}`)
+          .then(r => r.json())
+          .then(setMandiData)
+          .catch(console.error);
+      }
+    }
+  }, [onboardingDone, farmerProfile]);
+
+  if (!onboardingDone) {
+    return <Onboarding onComplete={completeOnboarding} />;
+  }
 
   return (
     <div className="flex h-screen bg-cream font-body overflow-hidden">
       {/* Left Sidebar */}
-      <motion.div 
+      <motion.div
         initial={{ x: -300, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
@@ -24,7 +47,7 @@ function AppContent() {
       </motion.div>
 
       {/* Main Chat Area */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, delay: 0.15 }}
@@ -36,7 +59,7 @@ function AppContent() {
       {/* Right Panel */}
       <AnimatePresence>
         {rightPanelOpen && (mandiData || weatherData) && (
-          <motion.div 
+          <motion.div
             initial={{ x: 340, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 340, opacity: 0 }}

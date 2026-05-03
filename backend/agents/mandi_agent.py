@@ -13,9 +13,13 @@ def process_mandi(state: AgriState) -> AgriState:
         
         best_mandi = mandi_data.get("best_mandi", "Unknown")
         arbitrage = mandi_data.get("arbitrage_opportunity", "")
-        prices_str = ", ".join([f"{p['mandi']} (₹{p['price']}/q, {p['trend']})" for p in mandi_data.get("prices", [])])
         
-        output = f"Prices: {prices_str}. Best Mandi: {best_mandi}. Arbitrage: {arbitrage}. Recommend selling now at {best_mandi} if transport costs are justified."
+        if "raw_search_result" in mandi_data:
+            prices_str = mandi_data["raw_search_result"]
+            output = f"Live Market Data: {prices_str}. Disclaimer: {mandi_data.get('disclaimer')}"
+        else:
+            prices_str = ", ".join([f"{p['mandi']} (₹{p['price']}/q, {p['trend']})" for p in mandi_data.get("prices", [])])
+            output = f"Prices: {prices_str}. Best Mandi: {best_mandi}. Arbitrage: {arbitrage}. Recommend selling now at {best_mandi} if transport costs are justified."
         
         state["agent_outputs"]["MandiAgent"] = output
         state["agent_confidence"]["MandiAgent"] = confidence

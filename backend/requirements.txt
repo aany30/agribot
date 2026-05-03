@@ -2,8 +2,9 @@ fastapi
 uvicorn
 langgraph
 langchain
-langchain-anthropic
-anthropic
+langchain-openai
+langchain-community
+duckduckgo-search
 openai
 gTTS
 deep-translator

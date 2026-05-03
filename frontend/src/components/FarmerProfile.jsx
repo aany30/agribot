@@ -6,6 +6,8 @@ export default function FarmerProfile() {
   const { farmerProfile, setFarmerProfile, language, setLanguage } = useContext(AgriContext);
   const [isEditing, setIsEditing] = useState(false);
 
+  if (!farmerProfile) return null;
+
   const toggleLanguage = () => {
     const newLang = language === 'hi' ? 'en' : 'hi';
     setLanguage(newLang);

@@ -1,12 +1,33 @@
 import os
+from langchain_community.tools import DuckDuckGoSearchRun
 
 def get_mandi_prices(crop: str, state: str) -> dict:
-    api_key = os.getenv("AGMARKNET_API_KEY")
-    if not api_key:
+    # Try fetching via search
+    try:
+        search = DuckDuckGoSearchRun()
+        query = f"current mandi price of {crop} in {state} today"
+        result = search.invoke(query)
+        
+        # Simple extraction from the text, using the LLM later to parse it. 
+        # For the tool output, we'll just return the raw text as "prices" and mark it live.
+        # But wait, the mandi agent expects a specific dict format.
+        # Let's provide it in the format the agent can use or adapt the agent.
+        
+        # We will parse out a mock-like structure but populate it with the search result
+        # so the agent can still construct a response easily.
+        
+        return {
+            "live": True,
+            "prices": [
+                {"mandi": "Search Result", "price": result[:100] + "...", "trend": "live"}
+            ],
+            "best_mandi": "Varies (see search)",
+            "arbitrage_opportunity": "Check local sources",
+            "disclaimer": "⚠️ Live data fetched via web search. Verify at local mandi.",
+            "raw_search_result": result
+        }
+    except Exception as e:
         return _get_mock_mandi(crop, state)
-    
-    # Placeholder for actual API call, defaulting to mock for robust demonstration
-    return _get_mock_mandi(crop, state)
 
 def _get_mock_mandi(crop: str, state: str) -> dict:
     crop_name = crop.capitalize() if crop else "Wheat"
