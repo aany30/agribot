@@ -5,7 +5,7 @@ from backend.models.state import AgriState
 
 def process_pest(state: AgriState) -> AgriState:
     state["agent_status"]["PestAgent"] = "active"
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     query = state["english_query"]
     confidence = 0.8 if len(query.split()) > 5 else 0.5
     

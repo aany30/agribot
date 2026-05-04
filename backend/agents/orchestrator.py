@@ -16,13 +16,64 @@ from backend.agents.finance_agent import process_finance
 from backend.agents.storage_agent import process_storage
 from backend.agents.yield_agent import process_yield
 
+VALID_INTENTS = [
+    "crop_selection",
+    "pest_disease",
+    "weather_irrigation",
+    "mandi_price",
+    "soil_health",
+    "finance_scheme",
+    "post_harvest",
+    "yield_prediction",
+    "general",
+]
+
+INTENT_AGENT_MAP = {
+    "crop_selection": ["CropAgent", "WeatherAgent", "SoilAgent"],
+    "pest_disease": ["PestAgent", "SoilAgent"],
+    "weather_irrigation": ["WeatherAgent", "CropAgent"],
+    "mandi_price": ["MandiAgent", "StorageAgent"],
+    "soil_health": ["SoilAgent", "CropAgent"],
+    "finance_scheme": ["FinanceAgent"],
+    "post_harvest": ["StorageAgent", "MandiAgent"],
+    "yield_prediction": ["YieldAgent", "WeatherAgent"],
+    "general": ["CropAgent", "WeatherAgent", "SoilAgent"],
+}
+
+AGENT_PROCESSORS = {
+    "CropAgent": process_crop,
+    "WeatherAgent": process_weather,
+    "MandiAgent": process_mandi,
+    "PestAgent": process_pest,
+    "SoilAgent": process_soil,
+    "FinanceAgent": process_finance,
+    "StorageAgent": process_storage,
+    "YieldAgent": process_yield,
+}
+
+def classify_intent_with_keywords(query: str) -> str:
+    query = query.lower()
+    keyword_intents = [
+        ("pest_disease", ["pest", "disease", "insect", "fungus", "leaf spot", "rust", "aphid", "worm", "blight", "yellow leaves"]),
+        ("weather_irrigation", ["weather", "rain", "rainfall", "irrigation", "water", "temperature", "forecast", "monsoon"]),
+        ("mandi_price", ["mandi", "market", "price", "sell", "rate", "quintal", "buyer"]),
+        ("soil_health", ["soil", "fertilizer", "fertiliser", "npk", "ph", "compost", "manure", "nutrient"]),
+        ("finance_scheme", ["loan", "scheme", "subsidy", "insurance", "pm-kisan", "kcc", "credit", "finance"]),
+        ("post_harvest", ["storage", "store", "warehouse", "harvested", "post harvest", "shelf life"]),
+        ("yield_prediction", ["yield", "production", "quintals per acre", "estimate", "output"]),
+        ("crop_selection", ["which crop", "what crop", "crop should", "sow", "plant", "seed", "variety", "intercrop"]),
+    ]
+    for intent, keywords in keyword_intents:
+        if any(keyword in query for keyword in keywords):
+            return intent
+    return "general"
+
 def intent_classifier(state: AgriState):
     api_key = os.getenv("OPENAI_API_KEY")
     query = state.get("english_query", "")
+    intent = classify_intent_with_keywords(query)
     
-    if not api_key:
-        state["intent"] = "general"
-    else:
+    if api_key:
         try:
             llm = ChatOpenAI(model="gpt-4o", api_key=api_key)
             prompt = PromptTemplate.from_template(
@@ -30,39 +81,40 @@ def intent_classifier(state: AgriState):
                 "Return ONLY the intent string. Query: {query}"
             )
             res = (prompt | llm).invoke({"query": query}).content.strip().lower()
-            valid_intents = ["crop_selection", "pest_disease", "weather_irrigation", "mandi_price", "soil_health", "finance_scheme", "post_harvest", "yield_prediction", "general"]
-            if res in valid_intents:
-                state["intent"] = res
-            else:
-                state["intent"] = "general"
+            if res in VALID_INTENTS:
+                intent = res
         except Exception:
-            state["intent"] = "general"
+            pass
 
-    intent = state["intent"]
-    if intent == "crop_selection":
-        state["active_agents"] = ["CropAgent", "WeatherAgent", "SoilAgent"]
-    elif intent == "pest_disease":
-        state["active_agents"] = ["PestAgent", "SoilAgent"]
-    elif intent == "weather_irrigation":
-        state["active_agents"] = ["WeatherAgent", "CropAgent"]
-    elif intent == "mandi_price":
-        state["active_agents"] = ["MandiAgent", "WeatherAgent", "StorageAgent"]
-    elif intent == "soil_health":
-        state["active_agents"] = ["SoilAgent", "CropAgent"]
-    elif intent == "finance_scheme":
-        state["active_agents"] = ["FinanceAgent"]
-    elif intent == "post_harvest":
-        state["active_agents"] = ["StorageAgent", "MandiAgent"]
-    elif intent == "yield_prediction":
-        state["active_agents"] = ["YieldAgent", "WeatherAgent"]
-    else:
-        state["active_agents"] = ["CropAgent", "WeatherAgent", "MandiAgent", "PestAgent", "SoilAgent", "FinanceAgent", "StorageAgent", "YieldAgent"]
+    state["intent"] = intent
+    state["active_agents"] = INTENT_AGENT_MAP[intent]
         
     return {"intent": state["intent"], "active_agents": state["active_agents"]}
 
 def route_agents(state: AgriState):
     agents = state.get("active_agents", [])
     return [Send(agent, state) for agent in agents]
+
+def run_agent(agent_name: str, state: AgriState):
+    processor = AGENT_PROCESSORS[agent_name]
+    agent_state = {
+        **state,
+        "agent_outputs": dict(state.get("agent_outputs", {})),
+        "agent_confidence": dict(state.get("agent_confidence", {})),
+        "agent_status": dict(state.get("agent_status", {})),
+    }
+    result = processor(agent_state)
+    return {
+        "agent_outputs": {
+            agent_name: result.get("agent_outputs", {}).get(agent_name, "Service unavailable")
+        },
+        "agent_confidence": {
+            agent_name: result.get("agent_confidence", {}).get(agent_name, 0.0)
+        },
+        "agent_status": {
+            agent_name: result.get("agent_status", {}).get(agent_name, "failed")
+        },
+    }
 
 def conflict_resolver(state: AgriState):
     has_conflict, explanation = check_for_conflicts(state.get("agent_outputs", {}))
@@ -73,22 +125,27 @@ def conflict_resolver(state: AgriState):
 
 def response_synthesizer(state: AgriState):
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return {
-            "final_recommendation": f"Mock final recommendation based on agents: {state.get('agent_outputs')}\nConfidence: High\nData Sources: Mock\nFollow-up: Is there anything else I can help with?"
-        }
-    
-    # Filter agent outputs based on confidence
     agent_outputs = state.get("agent_outputs", {})
     agent_confidence = state.get("agent_confidence", {})
-    
-    high_confidence_outputs = {}
-    for agent, output in agent_outputs.items():
-        if agent_confidence.get(agent, 0) > 0.8:
-            high_confidence_outputs[agent] = output
-            
-    if not high_confidence_outputs:
-        high_confidence_outputs = {"System": "I couldn't find a high confidence answer for that query. Based on the context, here is the closest advice: " + str(agent_outputs)}
+    active_agents = state.get("active_agents", [])
+
+    relevant_outputs = {
+        agent: agent_outputs[agent]
+        for agent in active_agents
+        if agent in agent_outputs and agent_confidence.get(agent, 0) >= 0.6
+    }
+
+    if not relevant_outputs:
+        relevant_outputs = {
+            agent: output
+            for agent, output in agent_outputs.items()
+            if agent in active_agents
+        } or agent_outputs
+
+    if not api_key:
+        return {
+            "final_recommendation": "OPENAI_API_KEY is not configured, so the AI response could not be generated."
+        }
 
     try:
         llm = ChatOpenAI(model="gpt-4o", api_key=api_key)
@@ -97,22 +154,23 @@ def response_synthesizer(state: AgriState):
             "Query: {query}\n"
             "Agent Outputs: {outputs}\n"
             "Conflicts: {conflicts}\n\n"
-            "Write a simple, plain language response in English. Include:\n"
+            "Write a fresh, simple, plain language response in English that directly answers the farmer's question. Include:\n"
             "- Main recommendation\n"
             "- Which agents contributed and what they said\n"
             "- Confidence level (High/Medium/Low based on scores)\n"
             "- If conflicts exist, flag both options with tradeoffs.\n"
             "- Data sources used\n"
             "- A single follow_up_question to refine advice further.\n"
+            "Do not invent live facts not present in Agent Outputs. If a tool output is fallback/mock data, say that clearly.\n"
         )
         res = (prompt | llm).invoke({
             "query": state.get("english_query", ""),
-            "outputs": str(high_confidence_outputs),
+            "outputs": str(relevant_outputs),
             "conflicts": state.get("conflict_explanation", "") if state.get("conflicts_detected") else "None"
         })
         return {"final_recommendation": res.content}
     except Exception:
-        return {"final_recommendation": "Service unavailable. Could not synthesize response."}
+        return {"final_recommendation": "The AI response could not be generated right now. Please check the OpenAI API key and server logs."}
 
 def hallucination_guard(state: AgriState):
     rec = state.get("final_recommendation", "")
@@ -137,14 +195,14 @@ def language_responder(state: AgriState):
 builder = StateGraph(AgriState)
 
 builder.add_node("intent_classifier", intent_classifier)
-builder.add_node("CropAgent", process_crop)
-builder.add_node("WeatherAgent", process_weather)
-builder.add_node("MandiAgent", process_mandi)
-builder.add_node("PestAgent", process_pest)
-builder.add_node("SoilAgent", process_soil)
-builder.add_node("FinanceAgent", process_finance)
-builder.add_node("StorageAgent", process_storage)
-builder.add_node("YieldAgent", process_yield)
+builder.add_node("CropAgent", lambda state: run_agent("CropAgent", state))
+builder.add_node("WeatherAgent", lambda state: run_agent("WeatherAgent", state))
+builder.add_node("MandiAgent", lambda state: run_agent("MandiAgent", state))
+builder.add_node("PestAgent", lambda state: run_agent("PestAgent", state))
+builder.add_node("SoilAgent", lambda state: run_agent("SoilAgent", state))
+builder.add_node("FinanceAgent", lambda state: run_agent("FinanceAgent", state))
+builder.add_node("StorageAgent", lambda state: run_agent("StorageAgent", state))
+builder.add_node("YieldAgent", lambda state: run_agent("YieldAgent", state))
 builder.add_node("conflict_resolver", conflict_resolver)
 builder.add_node("response_synthesizer", response_synthesizer)
 builder.add_node("hallucination_guard", hallucination_guard)

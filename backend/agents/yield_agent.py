@@ -5,7 +5,7 @@ from backend.models.state import AgriState
 
 def process_yield(state: AgriState) -> AgriState:
     state["agent_status"]["YieldAgent"] = "active"
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     profile = state["farmer_profile"]
     
     if not api_key:

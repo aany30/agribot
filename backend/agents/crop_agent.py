@@ -6,7 +6,7 @@ from backend.models.state import AgriState
 def process_crop(state: AgriState) -> AgriState:
     state["agent_status"]["CropAgent"] = "active"
     profile = state["farmer_profile"]
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     confidence = 0.85 if profile.get("crop") and profile.get("location") else 0.6
     
     if not api_key:

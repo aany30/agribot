@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 from dotenv import load_dotenv
-load_dotenv()  # CRITICAL: loads OPENAI_API_KEY from .env file
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 from fastapi import FastAPI, WebSocket, UploadFile, File, Form, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
